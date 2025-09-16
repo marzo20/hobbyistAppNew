@@ -98,6 +98,45 @@ router.get('/', auth, async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Failed to fetch activity feed' });
     }
 });
+// POST /api/activities/:hobbyId - Create a new activity post in a specific hobby
+router.post('/:hobbyId', auth, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    const { hobbyId } = req.params;
+    const { content, imageUrl } = req.body; // imageUrl is optional
+
+    if (!content) {
+      return res.status(400).json({ message: 'Content is required.' });
+    }
+
+    // Check if the hobby exists
+    const hobby = await Hobby.findById(hobbyId);
+    if (!hobby) {
+      return res.status(404).json({ message: 'Hobby not found.' });
+    }
+    
+    const newPost = new ActivityPost({
+      hobbyId,
+      content,
+      imageUrl: imageUrl || '', // Use provided imageUrl or empty string
+      author: req.user.id,
+    });
+
+    await newPost.save();
+
+    // Populate the author info before sending the response
+    const populatedPost = await newPost.populate('author', 'nickname profilePicture');
+
+    res.status(201).json(populatedPost);
+
+  } catch (error) {
+    console.error("Error creating activity post:", error);
+    res.status(500).json({ message: 'Server error while creating post.' });
+  }
+});
 
 
 export default router;

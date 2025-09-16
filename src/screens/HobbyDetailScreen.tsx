@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert, Platform, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert, Platform, FlatList, TextInput } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,6 +46,9 @@ const HobbyDetailScreen = () => {
   const [members, setMembers] = useState<UserInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasJoined, setHasJoined] = useState(false);
+
+   const [newPostContent, setNewPostContent] = useState('');
+  const [isPosting, setIsPosting] = useState(false);
   
   const { hobbyId } = route.params as { hobbyId: string };
 
@@ -111,6 +114,38 @@ const HobbyDetailScreen = () => {
     }
   }, [isFocused, fetchHobbyDetails]);
 
+   const handleCreatePost = async () => {
+    if (!newPostContent.trim()) return;
+
+    setIsPosting(true);
+    const token = await getToken();
+    if (!token) {
+      setIsPosting(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/activities/${hobbyId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: newPostContent.trim() }),
+      });
+
+      const newPost = await response.json();
+      if (!response.ok) {
+        throw new Error(newPost.message || 'Failed to create post.');
+      }
+      setActivities(prevActivities => [newPost, ...prevActivities]);
+      setNewPostContent('');
+       } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setIsPosting(false);
+    }
+  };
   const handleJoinHobby = useCallback(async () => {
     if (!hobbyId || !userInfo) {
       Alert.alert(t('alertError'), t('alertLoginFailedNoToken'));
@@ -251,6 +286,21 @@ const HobbyDetailScreen = () => {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('activityFeedTitle')}</Text>
+           {/* ✨ ADD: 새 게시물 작성 UI (참여한 멤버에게만 보임) */}
+          {hasJoined && (
+            <View style={styles.postInputContainer}>
+              <TextInput
+                style={styles.postInput}
+                placeholder="Share your activity..."
+                value={newPostContent}
+                onChangeText={setNewPostContent}
+                multiline
+              />
+              <TouchableOpacity style={styles.postButton} onPress={handleCreatePost} disabled={isPosting}>
+                {isPosting ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.postButtonText}>Post</Text>}
+              </TouchableOpacity>
+            </View>
+          )}
           {activities.length > 0 ? (
             <FlatList
               data={activities}
@@ -316,6 +366,30 @@ const styles = StyleSheet.create({
   activitySeparator: { height: 1, backgroundColor: '#DDDDDD', marginHorizontal: 15 },
   emptyText: { textAlign: 'center', marginTop: 10, fontSize: 14, color: '#666666' },
   chatButton: { position: 'absolute', bottom: 80, right: 20, backgroundColor: '#6200EE', borderRadius: 30, width: 60, height: 60, justifyContent: 'center', alignItems: 'center', shadowColor: '#333333', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 5, elevation: 5 },
+postInputContainer: {
+    paddingHorizontal: 15,
+    marginBottom: 20,
+  },
+  postInput: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 16,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  postButton: {
+    backgroundColor: '#007AFF',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  postButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
 });
+
 
 export default HobbyDetailScreen;
