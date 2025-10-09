@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import ActivityPost from '../models/ActivityPost';
+import Hobby from '../models/Hobby';
 import auth  from '../middleware/auth';
 
 const router = Router();

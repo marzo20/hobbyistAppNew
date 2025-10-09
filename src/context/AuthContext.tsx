@@ -1,4 +1,5 @@
-import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
+import React from 'react';
+import { createContext, useState, useEffect, useContext, ReactNode, useCallback, useMemo } from 'react'; // useMemo 추가
 import * as SecureStore from 'expo-secure-store';
 import { Alert } from 'react-native';
 
@@ -17,12 +18,14 @@ interface UserInfo {
 interface AuthState {
   isLoading: boolean;
   isLoggedIn: boolean;
+  isProfileComplete: boolean;
   userToken: string | null;
   userInfo: UserInfo | null;
   loginSuccess: (token: string) => Promise<void>;
   logout: () => Promise<void>;
   getToken: () => Promise<string | null>;
   fetchUserInfo: () => Promise<void>;
+  completeProfile: () => void;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -38,6 +41,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [userToken, setUserToken] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [isProfileComplete, setIsProfileComplete] = useState(false);
 
   const logout = useCallback(async () => {
     try {
@@ -45,6 +49,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await SecureStore.deleteItemAsync(USER_INFO_KEY);
       setUserToken(null);
       setUserInfo(null);
+      setIsProfileComplete(false);
     } catch (error) {
       console.error('[AuthContext] Logout failed:', error);
     }
@@ -53,6 +58,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const fetchUserInfo = useCallback(async () => {
     const token = await SecureStore.getItemAsync(USER_TOKEN_KEY);
     if (!token) {
+      setIsProfileComplete(false);
       return;
     }
 
@@ -62,23 +68,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
 
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          await logout();
-        }
         throw new Error('Failed to fetch user info');
       }
 
       const data = await response.json();
       if (data.user) {
-        const fetchedUserInfo: UserInfo = data.user;
-        // ✨ FIX: This line ensures the global state is updated.
-        setUserInfo(fetchedUserInfo);
-        await SecureStore.setItemAsync(USER_INFO_KEY, JSON.stringify(fetchedUserInfo));
+        setUserInfo(data.user);
+        await SecureStore.setItemAsync(USER_INFO_KEY, JSON.stringify(data.user));
+        
+        if (data.user.nickname && data.user.nickname.trim() !== '') {
+          setIsProfileComplete(true);
+        } else {
+          setIsProfileComplete(false);
+        }
+      } else {
+        await logout();
       }
     } catch (error) {
       console.error('[AuthContext] fetchUserInfo error:', error);
+      await logout();
     }
   }, [logout]);
+
+  const completeProfile = () => {
+    setIsProfileComplete(true);
+  };
 
   useEffect(() => {
     const bootstrapAsync = async () => {
@@ -93,12 +107,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
     bootstrapAsync();
   }, []);
-  
+
   useEffect(() => {
     if (userToken) {
       fetchUserInfo();
     } else {
       setUserInfo(null);
+      setIsProfileComplete(false);
     }
   }, [userToken, fetchUserInfo]);
 
@@ -117,16 +132,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   
   const isLoggedIn = !!userToken;
 
-  const authState: AuthState = {
+  // ✨ FIX: useMemo를 사용하여 context value가 불필요하게 재생성되는 것을 방지합니다.
+  const authState = useMemo(() => ({
     isLoading,
     isLoggedIn,
+    isProfileComplete,
     userToken,
     userInfo,
     loginSuccess,
     logout,
     getToken,
     fetchUserInfo,
-  };
+    completeProfile,
+  }), [isLoading, isLoggedIn, isProfileComplete, userToken, userInfo, loginSuccess, logout, getToken, fetchUserInfo]);
 
   return (
     <AuthContext.Provider value={authState}>

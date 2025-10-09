@@ -46,10 +46,9 @@ const HobbyDetailScreen = () => {
   const [members, setMembers] = useState<UserInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasJoined, setHasJoined] = useState(false);
-
-   const [newPostContent, setNewPostContent] = useState('');
+  const [newPostContent, setNewPostContent] = useState('');
   const [isPosting, setIsPosting] = useState(false);
-  
+
   const { hobbyId } = route.params as { hobbyId: string };
 
   const fetchHobbyDetails = useCallback(async () => {
@@ -93,7 +92,6 @@ const HobbyDetailScreen = () => {
       setActivities(activitiesResponse.ok ? activitiesData : []);
       setMembers(membersResponse.ok ? membersData : []);
 
-      // ✨ FIX: Compare IDs as strings to prevent object instance comparison issues.
       if (userInfo?.joinedHobbies?.map(id => id.toString()).includes(hobbyData._id.toString())) {
         setHasJoined(true);
       } else {
@@ -106,7 +104,8 @@ const HobbyDetailScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [hobbyId, userInfo, getToken, navigation, t]);
+    // ✨ FIX: useCallback의 의존성 배열을 안정적인 값들로 재구성하여 무한 루프를 방지합니다.
+  }, [hobbyId, getToken, userInfo?.joinedHobbies]);
 
   useEffect(() => {
     if (isFocused) {
@@ -114,38 +113,33 @@ const HobbyDetailScreen = () => {
     }
   }, [isFocused, fetchHobbyDetails]);
 
-   const handleCreatePost = async () => {
+  const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
-
     setIsPosting(true);
     const token = await getToken();
     if (!token) {
       setIsPosting(false);
       return;
     }
-
     try {
       const response = await fetch(`${BACKEND_BASE_URL}/api/activities/${hobbyId}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ content: newPostContent.trim() }),
       });
-
       const newPost = await response.json();
       if (!response.ok) {
         throw new Error(newPost.message || 'Failed to create post.');
       }
       setActivities(prevActivities => [newPost, ...prevActivities]);
       setNewPostContent('');
-       } catch (error: any) {
+    } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
       setIsPosting(false);
     }
   };
+
   const handleJoinHobby = useCallback(async () => {
     if (!hobbyId || !userInfo) {
       Alert.alert(t('alertError'), t('alertLoginFailedNoToken'));
@@ -171,8 +165,6 @@ const HobbyDetailScreen = () => {
       }
       
       Alert.alert(t('alertSuccess'), t('joinedHobby'));
-      
-      // Refresh global user info. This will trigger a re-render and a re-fetch of hobby details.
       await fetchUserInfo();
 
     } catch (error: any) {
@@ -181,7 +173,7 @@ const HobbyDetailScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [hobbyId, userInfo, getToken, fetchUserInfo, t]);
+  }, [hobbyId, userInfo, getToken, fetchUserInfo]);
 
 
   const renderMemberItem = ({ item }: { item: UserInfo }) => (
@@ -212,14 +204,13 @@ const HobbyDetailScreen = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6200EE" />
-        <Text style={styles.loadingText}>{t('gettingHobbies')}</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <ScrollView>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
         </TouchableOpacity>
@@ -286,7 +277,7 @@ const HobbyDetailScreen = () => {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('activityFeedTitle')}</Text>
-           {/* ✨ ADD: 새 게시물 작성 UI (참여한 멤버에게만 보임) */}
+          
           {hasJoined && (
             <View style={styles.postInputContainer}>
               <TextInput
@@ -301,13 +292,13 @@ const HobbyDetailScreen = () => {
               </TouchableOpacity>
             </View>
           )}
+
           {activities.length > 0 ? (
             <FlatList
               data={activities}
               renderItem={renderActivityItem}
               keyExtractor={item => item._id}
               scrollEnabled={false}
-              ListEmptyComponent={<Text style={styles.emptyText}>{t('noPosts')}</Text>}
               ItemSeparatorComponent={() => <View style={styles.activitySeparator} />}
             />
           ) : (
@@ -329,44 +320,128 @@ const HobbyDetailScreen = () => {
   );
 };
 
-// Styles remain the same
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
-  scrollContainer: { flexGrow: 1 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 10, fontSize: 16, color: '#6200EE' },
-  headerImage: { width: '100%', height: 250, resizeMode: 'cover' },
-  backButton: { position: 'absolute', top: Platform.OS === 'ios' ? 60 : 30, left: 20, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 20, padding: 5 },
-  detailsSection: { backgroundColor: '#FFFFFF', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, marginTop: -20, shadowColor: '#333333', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 4 },
-  hobbyName: { fontSize: 24, fontWeight: 'bold', color: '#333333', marginBottom: 5 },
-  hobbyCategory: { fontSize: 16, color: '#6200EE' },
-  creatorRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 15, paddingVertical: 8, backgroundColor: '#f8f8f8', borderRadius: 8 },
-  creatorAvatar: { width: 30, height: 30, borderRadius: 15, marginHorizontal: 10 },
-  creatorText: { fontSize: 14, color: '#666666' },
-  creatorNickname: { fontWeight: 'bold', color: '#333333' },
-  detailsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  detailsIcon: { marginRight: 10 },
-  detailsText: { fontSize: 16, color: '#666666' },
-  descriptionText: { fontSize: 16, color: '#333333', marginBottom: 20 },
-  joinButton: { backgroundColor: '#6200EE', paddingVertical: 15, borderRadius: 10, alignItems: 'center', justifyContent: 'center', shadowColor: '#333333', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
-  joinButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
-  joinButtonJoined: { backgroundColor: '#666666' },
-  section: { backgroundColor: '#FFFFFF', marginHorizontal: 10, marginVertical: 10, paddingVertical: 15, borderRadius: 15, shadowColor: '#333333', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', paddingHorizontal: 15, marginBottom: 10, color: '#333333' },
-  membersList: { paddingHorizontal: 10 },
-  memberCard: { width: 80, marginHorizontal: 5, alignItems: 'center' },
-  memberAvatar: { width: 60, height: 60, borderRadius: 30, marginBottom: 5, backgroundColor: '#E6E6E6' },
-  memberName: { fontSize: 12, textAlign: 'center', color: '#333333' },
-  activityItem: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 15, paddingVertical: 10, backgroundColor: '#FFFFFF' },
-  activityAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 10, backgroundColor: '#E6E6E6' },
-  activityContent: { flex: 1 },
-  activityUserName: { fontWeight: 'bold', color: '#333333', fontSize: 16 },
-  activityText: { fontSize: 16, color: '#333333' },
-  activityTime: { fontSize: 12, color: '#666666', marginTop: 5 },
-  activitySeparator: { height: 1, backgroundColor: '#DDDDDD', marginHorizontal: 15 },
-  emptyText: { textAlign: 'center', marginTop: 10, fontSize: 14, color: '#666666' },
-  chatButton: { position: 'absolute', bottom: 80, right: 20, backgroundColor: '#6200EE', borderRadius: 30, width: 60, height: 60, justifyContent: 'center', alignItems: 'center', shadowColor: '#333333', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 5, elevation: 5 },
-postInputContainer: {
+  container: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerImage: {
+    width: '100%',
+    height: 250,
+    resizeMode: 'cover',
+  },
+  backButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 30,
+    left: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 20,
+    padding: 5,
+  },
+  detailsSection: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    marginTop: -20,
+  },
+  hobbyName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  hobbyCategory: {
+    fontSize: 16,
+    color: '#6200EE',
+  },
+  creatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 15,
+    paddingVertical: 8,
+    backgroundColor: '#f8f8f8',
+    borderRadius: 8,
+  },
+  creatorAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginHorizontal: 10,
+  },
+  creatorText: {
+    fontSize: 14,
+  },
+  creatorNickname: {
+    fontWeight: 'bold',
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  detailsIcon: {
+    marginRight: 10,
+  },
+  detailsText: {
+    fontSize: 16,
+  },
+  descriptionText: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  joinButton: {
+    backgroundColor: '#6200EE',
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  joinButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  joinButtonJoined: {
+    backgroundColor: '#666666',
+  },
+  section: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 10,
+    marginVertical: 10,
+    paddingVertical: 15,
+    borderRadius: 15,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    paddingHorizontal: 15,
+    marginBottom: 10,
+  },
+  membersList: {
+    paddingHorizontal: 10,
+  },
+  memberCard: {
+    width: 80,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  memberAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginBottom: 5,
+  },
+  memberName: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  postInputContainer: {
     paddingHorizontal: 15,
     marginBottom: 20,
   },
@@ -389,7 +464,60 @@ postInputContainer: {
     color: '#FFFFFF',
     fontWeight: 'bold',
   },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+  },
+  activityAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityUserName: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  activityText: {
+    fontSize: 16,
+  },
+  activityTime: {
+    fontSize: 12,
+    color: '#666666',
+    marginTop: 5,
+  },
+  activitySeparator: {
+    height: 1,
+    backgroundColor: '#DDDDDD',
+    marginHorizontal: 15,
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 10,
+    fontSize: 14,
+    color: '#666666',
+  },
+  chatButton: {
+    position: 'absolute',
+    bottom: 80,
+    right: 20,
+    backgroundColor: '#6200EE',
+    borderRadius: 30,
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 5,
+  },
 });
-
 
 export default HobbyDetailScreen;
